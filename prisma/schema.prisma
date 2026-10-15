@@ -1,0 +1,286 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @db.Uuid
+  email       String   @unique
+  fullName    String?  @map("full_name")
+  workspaceId String   @map("workspace_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("users")
+}
+
+model Workspace {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String
+  ownerUserId   String   @unique @map("owner_user_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  users         User[]
+  businessProfile BusinessProfile?
+  campaigns     Campaign[]
+  icps          Icp[]
+  leads         Lead[]
+  leadScans     LeadScan[]
+  messages      Message[]
+  messageVariants MessageVariant[]
+  sequences     Sequence[]
+  sendLogs      SendLog[]
+  replies       Reply[]
+  suppressionList SuppressionList[]
+  events        Event[]
+  settings      Settings?
+  auditLogs     AuditLog[]
+
+  @@map("workspaces")
+}
+
+model BusinessProfile {
+  id             String   @id @default(uuid()) @db.Uuid
+  workspaceId    String   @unique @map("workspace_id") @db.Uuid
+  companyName    String   @map("company_name")
+  website        String?
+  description    String?
+  senderName     String?  @map("sender_name")
+  senderEmail    String?  @map("sender_email")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaigns Campaign[]
+
+  @@map("business_profiles")
+}
+
+model Campaign {
+  id                 String   @id @default(uuid()) @db.Uuid
+  workspaceId        String   @map("workspace_id") @db.Uuid
+  businessProfileId  String?  @map("business_profile_id") @db.Uuid
+  name               String
+  status             String   @default("draft")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  businessProfile BusinessProfile? @relation(fields: [businessProfileId], references: [id], onDelete: SetNull)
+  icps            Icp[]
+  leads           Lead[]
+  messages        Message[]
+  sequences       Sequence[]
+
+  @@index([workspaceId, status])
+  @@map("campaigns")
+}
+
+model Icp {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  campaignId  String?  @map("campaign_id") @db.Uuid
+  name        String
+  description String?
+  criteria    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign  Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  leads     Lead[]
+
+  @@index([workspaceId])
+  @@map("icps")
+}
+
+model Lead {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  campaignId  String?  @map("campaign_id") @db.Uuid
+  icpId       String?  @map("icp_id") @db.Uuid
+  email       String?
+  firstName   String?  @map("first_name")
+  lastName    String?  @map("last_name")
+  company     String?
+  title       String?
+  profileUrl  String?  @map("profile_url")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign  Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  icp       Icp?      @relation(fields: [icpId], references: [id], onDelete: SetNull)
+  scans     LeadScan[]
+  messages  Message[]
+  replies   Reply[]
+
+  @@index([workspaceId, email])
+  @@map("leads")
+}
+
+model LeadScan {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  leadId      String   @map("lead_id") @db.Uuid
+  score       Int?
+  result      Json     @default("{}")
+  scannedAt   DateTime @default(now()) @map("scanned_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, leadId])
+  @@map("lead_scans")
+}
+
+model Message {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  leadId      String   @map("lead_id") @db.Uuid
+  campaignId  String?  @map("campaign_id") @db.Uuid
+  subject     String?
+  body        String
+  status      String   @default("draft")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  campaign  Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  variants  MessageVariant[]
+  sendLogs  SendLog[]
+
+  @@index([workspaceId, status])
+  @@map("messages")
+}
+
+model MessageVariant {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  messageId   String   @map("message_id") @db.Uuid
+  label       String
+  subject     String?
+  body        String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  message   Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, messageId])
+  @@map("message_variants")
+}
+
+model Sequence {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  campaignId  String?  @map("campaign_id") @db.Uuid
+  name        String
+  definition  Json     @default("[]")
+  status      String   @default("draft")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign  Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@map("sequences")
+}
+
+model SendLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  messageId   String    @map("message_id") @db.Uuid
+  provider     String?
+  status      String    @default("queued")
+  sentAt      DateTime? @map("sent_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  message   Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  replies   Reply[]
+
+  @@index([workspaceId, status])
+  @@map("send_logs")
+}
+
+model Reply {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  leadId      String   @map("lead_id") @db.Uuid
+  sendLogId   String?  @map("send_log_id") @db.Uuid
+  body        String
+  receivedAt  DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  sendLog   SendLog?  @relation(fields: [sendLogId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, receivedAt])
+  @@map("replies")
+}
+
+model SuppressionList {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  email       String
+  reason      String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, email])
+  @@map("suppression_list")
+}
+
+model Event {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  type        String
+  payload     Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("events")
+}
+
+model Settings {
+  id                String   @id @default(uuid()) @db.Uuid
+  workspaceId       String   @unique @map("workspace_id") @db.Uuid
+  senderName        String   @default("") @map("sender_name")
+  senderEmail       String   @default("") @map("sender_email")
+  dailyLimit        Int      @default(50) @map("daily_limit")
+  scoreThreshold    Int      @default(70) @map("score_threshold")
+  tone              String   @default("professional")
+  languages         String[] @default(["English"])
+  encryptedApiKey   String?  @map("encrypted_api_key")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("settings")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  action      String
+  entity      String?
+  entityId    String?  @map("entity_id") @db.Uuid
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("audit_log")
+}
